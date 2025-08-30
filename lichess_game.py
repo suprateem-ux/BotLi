@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 import itertools
 import random
 import struct
