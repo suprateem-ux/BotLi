@@ -33,6 +33,16 @@ engines:
       Hash: 4096
       Move Overhead: 100
     limits: 
+  standard_human:
+    dir: "./engines"
+    name: "supraengine"
+    ponder: true
+    silence_stderr: false
+    move_overhead_multiplier: 2.0
+    uci_options:
+      Threads: 4
+      Hash: 4096
+    limits:
 
 syzygy:
   standard:
