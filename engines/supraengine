@@ -25,7 +25,7 @@ import chess
 import threading
 
 # ---------- CONFIG ----------
-MAX_DEPTH = 64
+MAX_DEPTH = 500
 MATE_VALUE = 1_000_000
 INFTY = 10**9
 DEFAULT_MOVE_TIME = 1.0
