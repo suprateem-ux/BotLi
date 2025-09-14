@@ -38,7 +38,7 @@ jobs:
         run: |
           pip install --no-cache-dir --prefer-binary -r requirements.txt
           sed -i "s/TokenTimeIsBackBuddyss/${{ secrets.LICHESS_KEY }}/g" config.yml
-          chmod +x ./engines/stockfish-ubuntu-x86-64-bmi2 ./engines/supraengine
+          chmod +x ./engines/stockfish-7-x64-bmi2 ./engines/supraengine
 
       - name: Run Bot
         run: |
