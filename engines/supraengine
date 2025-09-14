@@ -439,9 +439,9 @@ def evaluate(board: chess.Board) -> int:
         b_count = len(board.pieces(pt, chess.BLACK))
         score_white += val * (w_count - b_count)
         for s in board.pieces(pt, chess.WHITE):
-            score_white += PST[pt][s] // 2
+            score_white += interpolate_pst(board, pt, s, chess.WHITE) // 2
         for s in board.pieces(pt, chess.BLACK):
-            score_white -= PST[pt][chess.square_mirror(s)] // 2
+            score_white -= interpolate_pst(board, pt, s, chess.BLACK) // 2
     score_white += len(list(board.legal_moves)) // 4
     for c in [chess.E4, chess.D4, chess.E5, chess.D5]:
         p = board.piece_at(c)
