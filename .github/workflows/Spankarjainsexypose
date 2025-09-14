@@ -1,0 +1,48 @@
+name: Fetch and Push Stockfish
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout your repository
+      - name: Checkout this repo
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Checkout the source repo containing the engine
+      - name: Checkout veerbot/suprabot1
+        uses: actions/checkout@v3
+        with:
+          repository: veerbot/suprabot1
+          path: temp_repo
+          ref: main
+
+      # Create engines folder if it doesn't exist
+      - name: Ensure engines folder
+        run: mkdir -p ./engines
+
+      # Copy the Stockfish binary from the temporary repo
+      - name: Copy Stockfish to engines
+        run: cp temp_repo/engines/stockfish-7-x64-bmi2 ./engines/
+
+      # Make it executable
+      - name: Make Stockfish executable
+        run: chmod +x ./engines/stockfish-7-x64-bmi2
+
+      # Configure Git for push
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Commit and push changes
+      - name: Commit and Push
+        run: |
+          git add ./engines/stockfish-7-x64-bmi2
+          git commit -m "Add Stockfish 7 engine from veerbot/suprabot1"
+          git push
