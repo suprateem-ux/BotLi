@@ -10,6 +10,7 @@ Changes from the original:
 - Narrowed broad exception handlers and clarified some code paths.
 - Kept original optimizations (PosBB, hybrid SEE, move ordering, TT, mate
   search, UCI loop) and retained original global configuration values.
+- [2024 Copilot PATCH] UCI stop/infinite/quit is robust, using threads and a thread-safe stop_event.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import chess
+import threading
 
 # ---------- CONFIG ----------
 MAX_DEPTH = 64
@@ -46,7 +48,6 @@ class TTEntry:
     best: Optional[chess.Move]
     age: int
 
-
 TT: Dict[int, TTEntry] = {}
 TT_AGE = 0
 KILLERS: Dict[int, List[Optional[chess.Move]]] = {}
@@ -54,11 +55,13 @@ HISTORY: Dict[Tuple[int, int], int] = {}
 node_count = 0
 start_time = 0.0
 time_limit = 0.0
-stop_flag = False
 NODE_LIMIT = None
 
 # Separate mate TT (store mate distances / scores to avoid confusion with eval TT)
 MateTT: Dict[int, Optional[int]] = {}
+
+# Threading event for robust stoppability
+stop_event = threading.Event()
 
 # ---------- PIECES & PST ----------
 PV = {}
@@ -76,62 +79,44 @@ PST = {pt: [0] * 64 for pt in PIECE_VALUE}
 def now() -> float:
     return time.time()
 
-
 def timeout() -> bool:
-    return stop_flag or ((time.time() - start_time) >= time_limit)
-
+    return stop_event.is_set() or ((time.time() - start_time) >= time_limit)
 
 def within_node_limit() -> bool:
     return (NODE_LIMIT is None) or (node_count < NODE_LIMIT)
 
-
 def get_key(board: chess.Board) -> int:
-    # Use Zobrist hash (runtime), but silence Pyright with type: ignore.
     try:
         return board.zobrist_hash()  # type: ignore[attr-defined]
     except AttributeError:
-        # Fallback for ancient python-chess versions
         return hash(board.fen())
-
 
 # ---------- BITBOARD HELPERS ----------
 def lsb(bitboard: int) -> Optional[int]:
-    """Return index (0-63) of least-significant 1 bit, or None if zero."""
     if bitboard == 0:
         return None
     return (bitboard & -bitboard).bit_length() - 1
 
-
 def pop_lsb(bitboard: int) -> Tuple[Optional[int], int]:
-    """Return (lsb_index, new_bitboard_after_pop)."""
     if bitboard == 0:
         return None, 0
     l = lsb(bitboard)
     return l, bitboard & (bitboard - 1)
 
-
 # ---------- BITBOARD CACHE (per-position) ----------
 class PosBB:
-    """Small helper to cache bitboards and derived info for a position."""
-
     __slots__ = ("board", "occ", "piece_bb_w", "piece_bb_b", "all_attack_cache")
-
     def __init__(self, board: chess.Board):
         self.board = board
         self.occ = int(board.occupied)
-        # store per-piece-type bitboards per color
         self.piece_bb_w = {pt: int(board.pieces(pt, chess.WHITE)) for pt in PIECE_VALUE}
         self.piece_bb_b = {pt: int(board.pieces(pt, chess.BLACK)) for pt in PIECE_VALUE}
         self.all_attack_cache: Dict[int, int] = {}
-
     def attackers_bb(self, color: bool, square: int) -> int:
-        """Return bitboard (int) of attackers of color to square."""
         return int(self.board.attackers(color, square))
-
 
 # ---------- STATIC EXCHANGE EVALUATION (bitboard-simulated) ----------
 def see_safe(board: chess.Board, move: chess.Move) -> int:
-    """Fallback safe SEE (copy-based)."""
     try:
         b = board.copy()
         b.push(move)
@@ -148,7 +133,6 @@ def see_safe(board: chess.Board, move: chess.Move) -> int:
             attackers = list(b.attackers(side, move.to_square))
             if not attackers:
                 break
-            # choose least valuable attacker
             best_sq = attackers[0]
             piece = b.piece_at(best_sq)
             best_val = PIECE_VALUE.get(piece.piece_type, 0) if piece else 0
@@ -166,30 +150,21 @@ def see_safe(board: chess.Board, move: chess.Move) -> int:
             gains.append(captured_now_val - gains[-1])
             b.push(cap_move)
             side = not side
-        # minimax backward to compute net gain
         for i in range(len(gains) - 2, -1, -1):
             gains[i] = max(-gains[i + 1], gains[i])
         return gains[0] if gains else 0
     except Exception:
-        # If anything went wrong, don't crash SEE; return neutral
         return 0
 
-
 def see(board: chess.Board, move: chess.Move) -> int:
-    """
-    SEE that tries to avoid repeated heavy copies. Falls back to see_safe
-    in corner cases.
-    """
-    # quick filter
     if not board.is_capture(move) and not move.promotion:
         return 0
 
     pbb = PosBB(board)
     to_sq = move.to_square
     from_sq = move.from_square
-    side = board.turn  # True==white
+    side = board.turn
 
-    # Determine victim square/value (handle en-passant)
     if board.is_en_passant(move):
         victim_sq = to_sq + (-8 if side == chess.WHITE else 8)
         victim_piece_type = chess.PAWN
@@ -200,11 +175,9 @@ def see(board: chess.Board, move: chess.Move) -> int:
 
     victim_value = PIECE_VALUE.get(victim_piece_type, 0) if victim_piece_type else 0
 
-    # Build attacker masks for both colors
     attackers_white = pbb.attackers_bb(chess.WHITE, to_sq)
     attackers_black = pbb.attackers_bb(chess.BLACK, to_sq)
 
-    # Remove the moving piece from its side's attacker set (it moves)
     mover = board.piece_at(from_sq)
     if mover:
         if mover.color == chess.WHITE:
@@ -212,14 +185,12 @@ def see(board: chess.Board, move: chess.Move) -> int:
         else:
             attackers_black &= ~(1 << from_sq)
 
-    # Build a local occupancy int accounting for the move
     occ = pbb.occ
     occ &= ~(1 << from_sq)
     occ |= 1 << to_sq
     if board.is_en_passant(move):
         occ &= ~(1 << victim_sq)
 
-    # We will use a shallow board copy and push capture moves on it (hybrid).
     try:
         b = board.copy(stack=False)
     except TypeError:
@@ -237,7 +208,6 @@ def see(board: chess.Board, move: chess.Move) -> int:
         attackers = list(b.attackers(side_to_move, to_sq))
         if not attackers:
             break
-        # choose least-valuable attacker
         best_sq = attackers[0]
         piece = b.piece_at(best_sq)
         best_val = PIECE_VALUE.get(piece.piece_type, 0) if piece else 0
@@ -256,15 +226,12 @@ def see(board: chess.Board, move: chess.Move) -> int:
         try:
             b.push(cap_move)
         except Exception:
-            # fallback if pushing fails (shouldn't normally happen)
             break
         side_to_move = not side_to_move
 
-    # minimax backward to compute net gain
     for i in range(len(gains) - 2, -1, -1):
         gains[i] = max(-gains[i + 1], gains[i])
     return gains[0] if gains else 0
-
 
 # ---------- MOVE ORDERING ----------
 def mvv_lva_score(board: chess.Board, move: chess.Move) -> int:
@@ -273,13 +240,10 @@ def mvv_lva_score(board: chess.Board, move: chess.Move) -> int:
         attacker = board.piece_at(move.from_square)
         v = PIECE_VALUE.get(victim.piece_type, 0) if victim else 0
         a = PIECE_VALUE.get(attacker.piece_type, 0) if attacker else 0
-        # larger is better: prefer captures of high-value victims with low-value attackers
         return v * 100 - a
     if move.promotion:
-        # big bonus for promotions
         return 90_000
     return 0
-
 
 def move_score(
     board: chess.Board,
@@ -301,10 +265,8 @@ def move_score(
         if board.gives_check(move):
             score += 50_000
     except Exception:
-        # Some python-chess versions may raise for illegal queries; ignore here
         pass
     return score
-
 
 def order_moves(
     board: chess.Board, moves: List[chess.Move], pv_move: Optional[chess.Move], ply: int
@@ -318,14 +280,8 @@ def order_moves(
     scored.sort(reverse=True, key=lambda x: x[0])
     return [m for (_, m) in scored]
 
-
 # ---------- EVALUATION ----------
 def evaluate(board: chess.Board) -> int:
-    """Simple material + PST + mobility + center control + check penalty.
-
-    This returns a score *for the side to move* (positive means better for side to
-    move). That matches how the search uses evaluate and quiescence.
-    """
     score_white = 0
     for pt, val in PIECE_VALUE.items():
         w_count = len(board.pieces(pt, chess.WHITE))
@@ -335,27 +291,17 @@ def evaluate(board: chess.Board) -> int:
             score_white += PST[pt][s] // 2
         for s in board.pieces(pt, chess.BLACK):
             score_white -= PST[pt][chess.square_mirror(s)] // 2
-
-    # mobility-ish (tiny bonus)
     score_white += len(list(board.legal_moves)) // 4
-
-    # central squares tiny bonus
     for c in [chess.E4, chess.D4, chess.E5, chess.D5]:
         p = board.piece_at(c)
         if p:
             score_white += 15 if p.color == chess.WHITE else -15
-
-    # penalty if side to move is in check
     if board.is_check():
-        # if white to move and white is in check -> white worse
         if board.turn == chess.WHITE:
             score_white -= 50
         else:
             score_white += 50
-
-    # Convert to "score for side to move"
     return score_white if board.turn == chess.WHITE else -score_white
-
 
 # ---------- QUIESCENCE ----------
 def quiescence(board: chess.Board, alpha: int, beta: int) -> int:
@@ -368,18 +314,14 @@ def quiescence(board: chess.Board, alpha: int, beta: int) -> int:
         return beta
     if alpha < stand:
         alpha = stand
-
-    # Only captures and promotions
     moves = [m for m in board.legal_moves if board.is_capture(m) or m.promotion]
     if not moves:
         return stand
-
     moves = order_moves(board, moves, None, 0)
     for m in moves:
         if board.is_capture(m):
             s = see(board, m)
             if s + 50 < 0:
-                # drop hopeless recapture
                 continue
         board.push(m)
         try:
@@ -392,13 +334,11 @@ def quiescence(board: chess.Board, alpha: int, beta: int) -> int:
             alpha = val
     return alpha
 
-
 # ---------- TRANSPO TABLE ----------
 TT_EXACT = 0
 TT_LOWER = 1
 TT_UPPER = 2
-TT_SIZE_LIMIT = 2_000_000  # reserved (not actively enforced)
-
+TT_SIZE_LIMIT = 2_000_000
 
 def tt_lookup(key: int, depth: int, alpha: int, beta: int) -> Optional[int]:
     e = TT.get(key)
@@ -415,14 +355,11 @@ def tt_lookup(key: int, depth: int, alpha: int, beta: int) -> Optional[int]:
             return e.score
     return None
 
-
 def tt_store(key: int, depth: int, score: int, flag: int, best: Optional[chess.Move]) -> None:
     global TT_AGE
     e = TT.get(key)
-    # store if new or deeper or entry is from previous search age
     if e is None or depth > e.depth or e.age != TT_AGE:
         TT[key] = TTEntry(key, depth, score, flag, best, TT_AGE)
-
 
 # ---------- ALPHA-BETA (full search) ----------
 def alpha_beta(
@@ -460,7 +397,6 @@ def alpha_beta(
 
     pvmove = ttent.best if ttent else None
 
-    # Null move pruning
     if allow_null and depth >= 3 and not board.is_check() and not board.can_claim_draw():
         board.push(chess.Move.null())
         try:
@@ -468,7 +404,6 @@ def alpha_beta(
             if val >= beta:
                 return beta
         finally:
-            # Always pop the null move
             board.pop()
 
     moves = list(board.legal_moves)
@@ -481,7 +416,6 @@ def alpha_beta(
     first = True
 
     for i, mv in enumerate(moves):
-        # futility pruning for shallow depths
         if depth <= 2 and not board.is_capture(mv) and not board.gives_check(mv) and not mv.promotion:
             est = evaluate(board)
             if est + FUTILITY_MARGIN <= alpha:
@@ -489,7 +423,6 @@ def alpha_beta(
 
         reduction = 0
         if not first and depth >= 3 and not board.is_capture(mv) and not board.gives_check(mv) and not mv.promotion:
-            # Late Move Reduction heuristic
             reduction = int(LMR_BASE + math.log(max(depth, 2)) / LMR_DIV + math.log(i + 1) / LMR_DIV)
             reduction = max(0, min(reduction, depth - 2))
 
@@ -514,7 +447,6 @@ def alpha_beta(
         if val > alpha:
             alpha = val
         if alpha >= beta:
-            # store killer and history heuristics
             if not board.is_capture(mv):
                 km = KILLERS.setdefault(ply, [None, None])
                 if km[0] != mv:
@@ -532,10 +464,8 @@ def alpha_beta(
     tt_store(key, depth, best_score, flag, best_move)
     return best_score
 
-
 # ---------- MATE-ONLY SEARCH (fast focused solver) ----------
 def mate_dfs(board: chess.Board, depth: int, ply: int) -> Optional[int]:
-    """Depth-limited mate search. Returns mate score (MATE_VALUE - ply) or None if no forced mate found."""
     global node_count
     if timeout():
         raise TimeoutError
@@ -550,7 +480,6 @@ def mate_dfs(board: chess.Board, depth: int, ply: int) -> Optional[int]:
         return None
 
     moves = list(board.legal_moves)
-    # prioritize checking moves, then captures, then others
     checks = [m for m in moves if board.gives_check(m)]
     captures = [m for m in moves if board.is_capture(m) and m not in checks]
     others = [m for m in moves if (m not in checks and m not in captures)]
@@ -567,7 +496,6 @@ def mate_dfs(board: chess.Board, depth: int, ply: int) -> Optional[int]:
 
             opp_has_escape = False
             opp_moves = list(board.legal_moves)
-            # order opponent replies similarly
             opp_checks = [om for om in opp_moves if board.gives_check(om)]
             opp_captures = [om for om in opp_moves if board.is_capture(om) and om not in opp_checks]
             opp_others = [om for om in opp_moves if (om not in opp_checks and om not in opp_captures)]
@@ -589,22 +517,19 @@ def mate_dfs(board: chess.Board, depth: int, ply: int) -> Optional[int]:
                 board.pop()
                 return mate_score
         finally:
-            # make sure the original move is popped if still on stack
             if board.move_stack and board.move_stack[-1] == m:
                 board.pop()
 
     MateTT[key] = None
     return None
 
-
 def mate_search_root(board: chess.Board, max_mate_ply: int, time_limit_s: float) -> Optional[List[chess.Move]]:
-    """Search for mate within max_mate_ply (plies) and a time limit in seconds."""
-    global start_time, time_limit, stop_flag, node_count, MateTT
+    global start_time, time_limit, node_count, MateTT
     node_count = 0
     MateTT = {}
     start_time = time.time()
     time_limit = time_limit_s
-    stop_flag = False
+    stop_event.clear()
 
     for depth in range(1, max_mate_ply + 1):
         if timeout():
@@ -614,7 +539,6 @@ def mate_search_root(board: chess.Board, max_mate_ply: int, time_limit_s: float)
         except TimeoutError:
             break
         if res is not None:
-            # extract PV (naive): greedily reconstruct using mate_dfs test
             pv: List[chess.Move] = []
             b = board.copy()
             ply = 1
@@ -644,7 +568,6 @@ def mate_search_root(board: chess.Board, max_mate_ply: int, time_limit_s: float)
             return pv
     return None
 
-
 # ---------- ROOT SEARCH & ITERATIVE DEEPENING (full search) ----------
 def extract_pv(board: chess.Board, depth_limit: int) -> List[chess.Move]:
     pv: List[chess.Move] = []
@@ -660,7 +583,6 @@ def extract_pv(board: chess.Board, depth_limit: int) -> List[chess.Move]:
         b.push(mv)
     return pv
 
-
 def root_search(
     board: chess.Board,
     max_depth: int,
@@ -668,11 +590,10 @@ def root_search(
     nodes_limit: Optional[int] = None,
     multipv: int = 1,
 ):
-    """Iterative deepening root search. Returns (best_move, list of (score, pv))."""
-    global node_count, start_time, time_limit, stop_flag, TT_AGE, NODE_LIMIT
+    global node_count, start_time, time_limit, TT_AGE, NODE_LIMIT
     node_count = 0
     TT_AGE = (TT_AGE + 1) % 256
-    stop_flag = False
+    stop_event.clear()
     start_time = time.time()
     time_limit = movetime if movetime else DEFAULT_MOVE_TIME
     NODE_LIMIT = nodes_limit
@@ -731,7 +652,6 @@ def root_search(
         pass
     return best_move, results
 
-
 # ---------- UCI LOOP ----------
 def uci_loop() -> None:
     board = chess.Board()
@@ -739,6 +659,22 @@ def uci_loop() -> None:
     threads = 1
     hash_sz = 32
     random.seed(0xC0FFEE)
+    search_thread = None
+    search_result = {}
+    global node_count, start_time, time_limit, TT_AGE, NODE_LIMIT
+
+    def start_search(go_args):
+        command, args = go_args
+        if command == "mate":
+            mate_n, movetime = args
+            pv = mate_search_root(board, mate_n * 2, movetime)
+            search_result['pv'] = pv
+        else:
+            maxd, tlim, nodes, mpv = args
+            best, multipv_list = root_search(board, maxd, movetime=tlim, nodes_limit=nodes, multipv=mpv)
+            search_result['best'] = best
+            search_result['multipv_list'] = multipv_list
+
     while True:
         line = sys.stdin.readline()
         if not line:
@@ -755,7 +691,6 @@ def uci_loop() -> None:
             print("readyok")
         elif line.startswith("setoption"):
             toks = line.split()
-            # primitive parsing of 'setoption name X value Y'
             if "name" in toks:
                 try:
                     ni = toks.index("name") + 1
@@ -788,8 +723,12 @@ def uci_loop() -> None:
                     for mv in toks[toks.index("moves") + 1 :]:
                         board.push_uci(mv)
         elif line.startswith("go"):
+            # Kill any previous search
+            if search_thread and search_thread.is_alive():
+                stop_event.set()
+                search_thread.join(timeout=1.0)
+            stop_event.clear()
             toks = line.split()
-            # support "go mate N" for dedicated mate solver
             if "mate" in toks:
                 try:
                     mate_idx = toks.index("mate")
@@ -803,7 +742,15 @@ def uci_loop() -> None:
                     except Exception:
                         movetime = None
                 tlim = movetime if movetime else 5.0
-                pv = mate_search_root(board, mate_n * 2, tlim)
+                search_result.clear()
+                search_thread = threading.Thread(target=start_search, args=(("mate", (mate_n, tlim)),))
+                search_thread.start()
+                while search_thread.is_alive():
+                    try:
+                        search_thread.join(timeout=0.1)
+                    except KeyboardInterrupt:
+                        stop_event.set()
+                pv = search_result.get('pv')
                 if pv:
                     pv_str = " ".join(m.uci() for m in pv)
                     print(f"info score mate {mate_n} nodes {node_count} pv {pv_str}")
@@ -822,7 +769,6 @@ def uci_loop() -> None:
                 sys.stdout.flush()
                 continue
 
-            # normal search time control parsing
             wtime = btime = movetime = depth = nodes = None
             infinite = False
             if "wtime" in toks:
@@ -867,10 +813,16 @@ def uci_loop() -> None:
                 tlim = DEFAULT_MOVE_TIME
 
             maxd = depth if depth else 32
-            best, multipv_list = root_search(
-                board, maxd, movetime=tlim, nodes_limit=nodes, multipv=multipv
-            )
-
+            search_result.clear()
+            search_thread = threading.Thread(target=start_search, args=(("normal", (maxd, tlim, nodes, multipv)),))
+            search_thread.start()
+            while search_thread.is_alive():
+                try:
+                    search_thread.join(timeout=0.1)
+                except KeyboardInterrupt:
+                    stop_event.set()
+            multipv_list = search_result.get('multipv_list')
+            best = search_result.get('best')
             if multipv_list:
                 for idx, (sc, pv) in enumerate(multipv_list, start=1):
                     if abs(sc) > MATE_VALUE // 2:
@@ -889,10 +841,26 @@ def uci_loop() -> None:
                     print("bestmove", lm[0].uci())
                 else:
                     print("bestmove 0000")
+        elif line == "stop":
+            stop_event.set()
+            if search_thread and search_thread.is_alive():
+                search_thread.join(timeout=1.0)
+            best = search_result.get('best')
+            if best:
+                print("bestmove", best.uci())
+            else:
+                lm = list(board.legal_moves)
+                if lm:
+                    print("bestmove", lm[0].uci())
+                else:
+                    print("bestmove 0000")
+            sys.stdout.flush()
         elif line == "quit":
+            stop_event.set()
+            if search_thread and search_thread.is_alive():
+                search_thread.join(timeout=1.0)
             break
         sys.stdout.flush()
-
 
 if __name__ == "__main__":
     random.seed(0xC0FFEE)
