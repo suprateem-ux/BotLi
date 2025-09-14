@@ -49,7 +49,7 @@ syzygy:
     enabled: true
     paths:
       - "./engines/syzygy"
-    max_pieces: 7
+    max_pieces: 6
     instant_play: true
   antichess:
     enabled: false
