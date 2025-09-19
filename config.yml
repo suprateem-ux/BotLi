@@ -147,10 +147,10 @@ online_moves:
     enabled: true
     priority: 250
     only_without_book: false
-    min_candidates: 2
+    best_move: true
     min_time: 20
     timeout: 3
-    selection: "optimal"
+   # selection: "optimal"
     allow_repetitions: true      
     trust_eval: true 
     
