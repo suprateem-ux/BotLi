@@ -3,6 +3,7 @@ import os.path
 import subprocess
 import sys
 from dataclasses import dataclass
+from utils import validate_config_section
 from typing import Any
 
 import yaml
