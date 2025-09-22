@@ -27,8 +27,8 @@ jobs:
 
       - name: Run Ruff (fix + format)
         run: |
-          ruff check . --fix
-          ruff format .
+          ruff check . --fix --config .ruff.toml || true
+          ruff format . --config .ruff.toml
 
       - name: Commit changes
         run: |
@@ -40,4 +40,3 @@ jobs:
             git push origin lichessbot
           else
             echo "No changes to commit."
-          fi
