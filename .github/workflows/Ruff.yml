@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - lichessbot
-  workflow_dispatch:  # allows manual trigger too
+  workflow_dispatch:
 
 jobs:
   ruff:
@@ -40,4 +40,3 @@ jobs:
             git push origin lichessbot
           else
             echo "No changes to commit."
-          fi
