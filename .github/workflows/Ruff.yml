@@ -40,3 +40,4 @@ jobs:
             git push origin lichessbot
           else
             echo "No changes to commit."
+          fi
