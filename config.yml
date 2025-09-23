@@ -24,7 +24,7 @@ engines:
       # nodes: 8000000
   standard: 
     dir: "./engines"
-    name: "reckless-linux-avx2"
+    name: "lunar-linux-x64-v3"
     ponder: true
     silence_stderr: false 
     move_overhead_multiplier: 10.0
