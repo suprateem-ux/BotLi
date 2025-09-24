@@ -40,7 +40,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libdnnl-dev
           sed -i "s/TokenTimeIsBackBuddyss/${{ secrets.LICHESS_KEY }}/g" config.yml
-          chmod +x ./engines/lunar-linux-x64-v3 ./engines/supraengine
+          chmod +x ./engines/lc0 ./engines/supraengine
 
       - name: Run Bot
         run: |
