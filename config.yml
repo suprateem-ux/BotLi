@@ -32,7 +32,7 @@ engines:
       Threads: 4
       NNCacheSize: 400000
       MoveOverheadMS: 200
-      Backend: "dnnl"
+     # Backend: "dnnl"
       MiniBatchSize: 4 
     limits: 
   standard_human:
