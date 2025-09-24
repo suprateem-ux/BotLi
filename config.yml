@@ -22,7 +22,7 @@ engines:
       # time: 20.0
       # depth: 50
       # nodes: 8000000
-  standard_tournament: 
+  standard: 
     dir: "./engines"
     name: "lunar-linux-x64-v3"
     ponder: true
