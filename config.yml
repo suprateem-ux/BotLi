@@ -24,16 +24,16 @@ engines:
       # nodes: 8000000
   standard: 
     dir: "./engines"
-    name: "lc0"
+    name: "reckless-avx2"
     ponder: true
     silence_stderr: false 
-    move_overhead_multiplier: 1.0
+    move_overhead_multiplier: 10.7
     uci_options: 
       Threads: 4
-      NNCacheSize: 400000
+      Hash: 4500
       #MoveOverheadMS: 200
      # Backend: "dnnl"
-      MiniBatchSize: 4 
+    #  MiniBatchSize: 4 
     limits: 
   standard_human:
     dir: "./engines"
