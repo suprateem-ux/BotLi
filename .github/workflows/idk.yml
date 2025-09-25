@@ -37,10 +37,8 @@ jobs:
       - name: Install dependencies & prepare
         run: |
           pip install --no-cache-dir --prefer-binary -r requirements.txt
-          sudo apt-get update
-          sudo apt-get install -y libdnnl-dev
           sed -i "s/TokenTimeIsBackBuddyss/${{ secrets.LICHESS_KEY }}/g" config.yml
-          chmod +x ./engines/reckless-avx2 ./engines/supraengine
+          chmod +x ./engines/reckless-linux-avx2 ./engines/supraengine
 
       - name: Run Bot
         run: |
