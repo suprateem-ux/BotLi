@@ -249,6 +249,7 @@ whitelist:
 blacklist:
  # - NimsiluBot
  # - VEER-OMEGA-BOT
+online_blacklists:                        # List of URLs for online blacklists. One username per line.
 books:
  # Titans: "./engines/black.bin"
   optimus2502: "./engines/Book3.bin"
