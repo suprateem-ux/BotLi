@@ -152,7 +152,7 @@ online_moves:
     best_move: false
     min_time: 20
     timeout: 3
-    max_moves: false
+    max_moves: 1
    # selection: "optimal"
     allow_repetitions: true      
     trust_eval: true 
