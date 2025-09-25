@@ -73,7 +73,7 @@ gaviota:
   max_pieces: 5
 
 opening_books:
-  enabled: true
+  enabled: false
   priority: 401
   books:
     standard_white:
