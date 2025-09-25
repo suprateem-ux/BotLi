@@ -31,7 +31,7 @@ engines:
     uci_options: 
       Threads: 4
       NNCacheSize: 400000
-      MoveOverheadMS: 200
+      #MoveOverheadMS: 200
      # Backend: "dnnl"
       MiniBatchSize: 4 
     limits: 
