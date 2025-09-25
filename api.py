@@ -114,7 +114,13 @@ class API:
                 timeout=aiohttp.ClientTimeout(total=challenge_request.timeout),
             ) as response:
                 if response.status == 429:
-                    queue.put_nowait(API_Challenge_Reponse(has_reached_rate_limit=True))
+                    json_response = await response.json()
+                    queue.put_nowait(
+                        API_Challenge_Reponse(
+                            has_reached_rate_limit=True,
+                            wait_seconds=json_response.get("ratelimit", {}).get("seconds"),
+                        )
+                    )
                     return
 
                 async for line in response.content:
@@ -149,6 +155,16 @@ class API:
         except aiohttp.ClientResponseError as e:
             print(e)
             return False
+
+    async def download_blacklist(self, url: str) -> list[str] | None:
+        try:
+            async with self.external_session.get(url, timeout=aiohttp.ClientTimeout(total=5.0)) as response:
+                response.raise_for_status()
+                return (await response.text()).splitlines()
+        except aiohttp.ClientError as e:
+            print(f"Error downloading blacklist: {e}")
+        except TimeoutError:
+            print("Error downloading blacklist: Request timed out.")
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def get_account(self) -> dict[str, Any]:
