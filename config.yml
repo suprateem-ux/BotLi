@@ -24,7 +24,7 @@ engines:
       # nodes: 8000000
   standard: 
     dir: "./engines"
-    name: "reckless-avx2"
+    name: "reckless-linux-avx2"
     ponder: true
     silence_stderr: false 
     move_overhead_multiplier: 10.7
