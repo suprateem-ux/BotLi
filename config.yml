@@ -119,7 +119,7 @@ opening_books:
 online_moves:
  # dynamic_selection: true
   opening_explorer:
-    enabled: true
+    enabled: false
     priority: 249
  #   player: Username
     only_without_book: false
