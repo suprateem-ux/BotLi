@@ -119,7 +119,7 @@ opening_books:
 online_moves:
  # dynamic_selection: true
   opening_explorer:
-    enabled: false
+    enabled: true
     priority: 249
  #   player: Username
     only_without_book: false
@@ -152,7 +152,7 @@ online_moves:
     best_move: false
     min_time: 20
     timeout: 3
-    max_moves: 1
+   # max_moves: 1
    # selection: "optimal"
     allow_repetitions: true      
     trust_eval: true 
