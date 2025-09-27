@@ -1,0 +1,26 @@
+name: Reset lichessbot branch
+
+on:
+  workflow_dispatch:  # run manually from Actions tab
+
+jobs:
+  reset-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # fetch full history so we can reset
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Reset lichessbot branch to 39b5813
+        run: |
+          git fetch origin
+          git checkout lichessbot || git checkout -b lichessbot
+          git reset --hard 39b5813
+          git push origin lichessbot --force
