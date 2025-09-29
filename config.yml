@@ -197,17 +197,19 @@ challenge:
  #   - threeCheck
     - fromPosition
    # - crazyhouse
-  time_controls:
+  bot_time_controls:
     - bullet
     - blitz
     - rapid
   #  - classical
+  human_time_controls:
+    - rapid
   bot_modes:
    # - casual
     - rated
   human_modes:
     #- casual
-   #- rated
+    - rated
 
 matchmaking:
   delay: 491
