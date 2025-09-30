@@ -98,7 +98,7 @@ class Chatter:
             case "draw":
                 await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.draw_message)
             case "resign":
-                await self.api.send_chat_message(self.game_info.id, chat_message.room, self.resign_message)
+                await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.resign_message)
             case "eval":
                 await self._send_last_message(chat_message.room)
             case "motor":
@@ -224,23 +224,23 @@ class Chatter:
         )
 
     def _get_resign_message(self, config: Config) -> str:
-        too_low_raing = (
-            config.resign.min_raing is not None
+        too_low_rating = (
+            config.resign.min_rating is not None
             and self.lichess_game.engine.opponent.rating is not None
             and self.lichess_game.engine.opponent.rating < config.resign.min_rating
         )
         no_resign_against_humans = (
             not self.lichess_game.engine.opponent.is_engine and not config.resign.against_humans
         )
-        if not config.resign.enabled or too_low_raing or no_resign_against_humans:
+        if not config.resign.enabled or too_low_rating or no_resign_against_humans:
             return f"{self.username} will not resign."
 
         max_score = config.resign.score / 100
 
         return (
             f"{self.username} resigns at move {config.resign.min_game_length} or later "
-            f"if he eval is within +{max_score:.2f} to -{max_score:.2f} for the last "
-            f"{config.resign.consecutive_moves}."
+            f"if the eval is within +{max_score:.2f} to -{max_score:.2f} for the last "
+            f"{config.resign.consecutive_moves} moves."
         )
 
     def _get_name_message(self, version: str) -> str:
