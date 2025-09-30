@@ -13,6 +13,7 @@ from utils import ml_print
 COMMANDS = {
     "cpu": "Shows information about the bot's CPU (processor, cores, threads, frequency).",
     "draw": "Explains the bot's draw offering/accepting policy based on evaluation and game length.",
+    "resign": "Explains the bot's resignation policy based on evaluation and game length.",
     "eval": "Shows the latest position evaluation.",
     "motor": "Displays the name of the chess motor currently being used.",
     "name": "Shows the bot's name and motor information.",
@@ -36,6 +37,7 @@ class Chatter:
         self.opponent_username = self.game_info.black_name if lichess_game.is_white else self.game_info.white_name
         self.cpu_message = self._get_cpu()
         self.draw_message = self._get_draw_message(config)
+        self.resign_message = self._get_resign_message(config)
         self.name_message = self._get_name_message(config.version)
         self.ram_message = self._get_ram()
         self.player_greeting = self._format_message(config.messages.greeting)
@@ -95,6 +97,8 @@ class Chatter:
                 await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.cpu_message)
             case "draw":
                 await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.draw_message)
+            case "resign":
+                await self.api.send_chat_message(self.game_info.id, chat_message.room, self.resign_message)
             case "eval":
                 await self._send_last_message(chat_message.room)
             case "motor":
@@ -217,6 +221,26 @@ class Chatter:
             f"{self.username} offers draw at move {config.offer_draw.min_game_length} or later "
             f"if the eval is within +{max_score:.2f} to -{max_score:.2f} for the last "
             f"{config.offer_draw.consecutive_moves} moves."
+        )
+
+    def _get_resign_message(self, config: Config) -> str:
+        too_low_raing = (
+            config.resign.min_raing is not None
+            and self.lichess_game.engine.opponent.rating is not None
+            and self.lichess_game.engine.opponent.rating < config.resign.min_rating
+        )
+        no_resign_against_humans = (
+            not self.lichess_game.engine.opponent.is_engine and not config.resign.against_humans
+        )
+        if not config.resign.enabled or too_low_raing or no_resign_against_humans:
+            return f"{self.username} will not resign."
+
+        max_score = config.resign.score / 100
+
+        return (
+            f"{self.username} resigns at move {config.resign.min_game_length} or later "
+            f"if he eval is within +{max_score:.2f} to -{max_score:.2f} for the last "
+            f"{config.resign.consecutive_moves}."
         )
 
     def _get_name_message(self, version: str) -> str:
