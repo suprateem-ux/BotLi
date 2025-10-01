@@ -1,4 +1,4 @@
-name: Fetch Stockfish Engine Without Download
+name: Fetch Stockfish Engine Without Downloading ofc
 
 on:
   workflow_dispatch:
