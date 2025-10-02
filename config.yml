@@ -32,7 +32,7 @@ engines:
       Threads: 4
       Hash: 4500
       Table Memory: 512
-      Personality: "Positional"
+      Personality: "Active"
      # Dynamism: 169
       #MoveOverheadMS: 200
      # Backend: "dnnl"
@@ -76,7 +76,7 @@ gaviota:
   max_pieces: 5
 
 opening_books:
-  enabled: false
+  enabled: true
   priority: 401
   books:
     standard_white_tournament:
