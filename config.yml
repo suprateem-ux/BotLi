@@ -233,7 +233,7 @@ matchmaking:
     bm3:
       tc: 3+1
     gulugulu:
-      tc: 0+3
+      tc: 1+1
     guliguli:
       tc: 3+2
     hvj:
