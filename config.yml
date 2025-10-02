@@ -38,7 +38,7 @@ engines:
      # Backend: "dnnl"
     #  MiniBatchSize: 4 
     limits: 
-  standard_human:
+  standard_human_tournament:
     dir: "./engines"
     name: "supraengine"
     ponder: false
