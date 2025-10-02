@@ -24,13 +24,14 @@ engines:
       # nodes: 8000000
   standard: 
     dir: "./engines"
-    name: "komodo-14.1-linux-bmi2"
+    name: "dragon-linux-avx2"
     ponder: true
     silence_stderr: false 
     move_overhead_multiplier: 10.7
     uci_options: 
       Threads: 4
       Hash: 4500
+      Table Memory: 512
       #MoveOverheadMS: 200
      # Backend: "dnnl"
     #  MiniBatchSize: 4 
