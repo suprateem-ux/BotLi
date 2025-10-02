@@ -32,7 +32,8 @@ engines:
       Threads: 4
       Hash: 4500
       Table Memory: 512
-      Dynamism: 169
+      Personality: "Positional"
+     # Dynamism: 169
       #MoveOverheadMS: 200
      # Backend: "dnnl"
     #  MiniBatchSize: 4 
