@@ -1,0 +1,34 @@
+name: Sync LichessBot Branch
+
+on:
+  workflow_dispatch: # Only manual trigger
+
+jobs:
+  sync-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout main branch
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch full history
+
+      # Configure Git
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@users.noreply.github.com"
+
+      # Add upstream remote for Torom/BotLi
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/Torom/BotLi.git || echo "Remote already exists"
+          git fetch upstream --tags --force --prune
+
+      # Reset lichessbot branch to upstream/main
+      - name: Hard reset lichessbot branch
+        run: |
+          git checkout -B lichessbot
+          git reset --hard upstream/main
+          git push origin lichessbot --force
