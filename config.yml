@@ -243,7 +243,7 @@ matchmaking:
     loss:
       tc: 0.75+0
     drum:
-      tc: 0.5+0
+      tc: 0.5+8
       variant: standard
 
 messages:
