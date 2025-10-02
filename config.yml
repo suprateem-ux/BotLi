@@ -78,7 +78,7 @@ opening_books:
   enabled: false
   priority: 401
   books:
-    standard_white:
+    standard_white_tournament:
       selection: best_move 
       allow_repetitions: true  
      # max_depth: 80
@@ -91,7 +91,7 @@ opening_books:
        # - optimus4
       #  - Opimus3.1
       #  - noob
-    standard_black:
+    standard_black_tournament:
       selection: best_move 
       allow_repetitions: true  
      # max depth : 45 
@@ -116,6 +116,11 @@ opening_books:
       allow_repetitions: true
       names:
         - chess960
+    standard:
+      selection: weighed_random
+      allow_repetitions: false
+      names:
+        - komodo
     
 
 online_moves:
@@ -268,3 +273,4 @@ books:
   lilablack: "./engines/lila.bin"
   badwhite: "./engines/badwhite.bin"
   chess960: "./engines/chess960.bin"
+  komodo: "./engines/komodo.bin"
