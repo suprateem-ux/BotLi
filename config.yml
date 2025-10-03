@@ -178,7 +178,7 @@ offer_draw:
   consecutive_moves: 6
   min_game_length: 30
   against_humans: false
-  min_rating: 3000
+  min_rating: 2860
   use_for_variants: true
 
 resign:
