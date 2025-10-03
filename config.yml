@@ -33,7 +33,7 @@ engines:
       Hash: 4500
       Table Memory: 748
       Personality: "Defensive"
-      Dynamism: 169
+      #Dynamism: 130
       #MoveOverheadMS: 200
      # Backend: "dnnl"
     #  MiniBatchSize: 4 
