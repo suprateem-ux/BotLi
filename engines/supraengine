@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-import numpy as p 
+import numpy as np 
 import chess
 import threading
 
@@ -164,8 +164,13 @@ def get_phase(board: chess.Board) -> int:
 
 def interpolate_pst(board: chess.Board, pt: int, sq: int, color: bool) -> int:
     phase = get_phase(board)
-    mg = PST_MG[pt][sq if color == chess.WHITE else chess.square_mirror(sq)]
-    eg = PST_EG[pt][sq if color == chess.WHITE else chess.square_mirror(sq)]
+    if color == chess.WHITE:
+        r, f = chess.square_rank(sq), chess.square_file(sq)
+    else:
+        mirrored = chess.square_mirror(sq)
+        r, f = chess.square_rank(mirrored), chess.square_file(mirrored)
+    mg = PST_MG[pt][r, f]
+    eg = PST_EG[pt][r, f]
     score = ((mg * (PHASE_MAX - phase)) + (eg * phase)) // PHASE_MAX
     return score
 
