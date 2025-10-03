@@ -537,7 +537,7 @@ def evaluate(board: chess.Board) -> int:
         b_count = len(board.pieces(pt, chess.BLACK))
         score_white += val * (w_count - b_count)
         for s in board.pieces(pt, chess.WHITE):
-            pst_bonus = interpolate_pst(board, pt, s, chess.WHITE) // 2
+            pst_bonus = interpolate_pst(board, pt, s, chess.WHITE) 
             # Bishop pair PST adjustment: bonus for central squares if 2 bishops
             if pt == chess.BISHOP and len(board.pieces(chess.BISHOP, chess.WHITE)) >= 2:
                 if chess.square_file(s) in [2, 3, 4, 5] and chess.square_rank(s) in [2, 3, 4, 5]:
