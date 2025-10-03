@@ -33,12 +33,12 @@ engines:
       Hash: 4500
       Table Memory: 748
       Personality: "Defensive"
-     # Dynamism: 169
+      Dynamism: 169
       #MoveOverheadMS: 200
      # Backend: "dnnl"
     #  MiniBatchSize: 4 
     limits: 
-  standard_human_tournament:
+  standard_human:
     dir: "./engines"
     name: "supraengine"
     ponder: false
