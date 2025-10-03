@@ -528,6 +528,48 @@ def pawn_structure_hash(board):
     PAWN_HASH[key] = score_white
     return score_white
 
+def is_outpost(board, sq, color):
+    rank = chess.square_rank(sq)
+    file = chess.square_file(sq)
+    if color == chess.WHITE and rank >= 3:
+        for df in [-1, 1]:
+            f = file + df
+            if 0 <= f < 8:
+                for r in range(rank, 8):
+                    if chess.square(f, r) in board.pieces(chess.PAWN, chess.BLACK):
+                        return False
+        return True
+    if color == chess.BLACK and rank <= 4:
+        for df in [-1, 1]:
+            f = file + df
+            if 0 <= f < 8:
+                for r in range(rank, -1, -1):
+                    if chess.square(f, r) in board.pieces(chess.PAWN, chess.WHITE):
+                        return False
+        return True
+    return False
+
+def is_open_file(board, file, color):
+    own_pawns = board.pieces(chess.PAWN, color)
+    enemy_pawns = board.pieces(chess.PAWN, not color)
+    for r in range(8):
+        sq = chess.square(file, r)
+        if sq in own_pawns:
+            return False
+    for r in range(8):
+        sq = chess.square(file, r)
+        if sq in enemy_pawns:
+            return False
+    return True
+
+def is_semi_open_file(board, file, color):
+    own_pawns = board.pieces(chess.PAWN, color)
+    for r in range(8):
+        sq = chess.square(file, r)
+        if sq in own_pawns:
+            return False
+    return True
+
 def evaluate(board: chess.Board) -> int:
     score_white = 0
 
@@ -537,14 +579,14 @@ def evaluate(board: chess.Board) -> int:
         b_count = len(board.pieces(pt, chess.BLACK))
         score_white += val * (w_count - b_count)
         for s in board.pieces(pt, chess.WHITE):
-            pst_bonus = interpolate_pst(board, pt, s, chess.WHITE) 
+            pst_bonus = interpolate_pst(board, pt, s, chess.WHITE)
             # Bishop pair PST adjustment: bonus for central squares if 2 bishops
             if pt == chess.BISHOP and len(board.pieces(chess.BISHOP, chess.WHITE)) >= 2:
                 if chess.square_file(s) in [2, 3, 4, 5] and chess.square_rank(s) in [2, 3, 4, 5]:
                     pst_bonus += 10
             score_white += pst_bonus
         for s in board.pieces(pt, chess.BLACK):
-            pst_bonus = interpolate_pst(board, pt, s, chess.BLACK) // 2
+            pst_bonus = interpolate_pst(board, pt, s, chess.BLACK)
             if pt == chess.BISHOP and len(board.pieces(chess.BISHOP, chess.BLACK)) >= 2:
                 if chess.square_file(s) in [2, 3, 4, 5] and chess.square_rank(s) in [2, 3, 4, 5]:
                     pst_bonus += 10
@@ -576,27 +618,6 @@ def evaluate(board: chess.Board) -> int:
         score_white -= 35
 
     # --- Outpost Bonus (N/B on advanced square, not attackable by enemy pawns) ---
-    def is_outpost(board, sq, color):
-        rank = chess.square_rank(sq)
-        file = chess.square_file(sq)
-        if color == chess.WHITE and rank >= 3:
-            for df in [-1, 1]:
-                f = file + df
-                if 0 <= f < 8:
-                    for r in range(rank, 8):
-                        if chess.square(f, r) in board.pieces(chess.PAWN, chess.BLACK):
-                            return False
-            return True
-        if color == chess.BLACK and rank <= 4:
-            for df in [-1, 1]:
-                f = file + df
-                if 0 <= f < 8:
-                    for r in range(rank, -1, -1):
-                        if chess.square(f, r) in board.pieces(chess.PAWN, chess.WHITE):
-                            return False
-            return True
-        return False
-
     for sq in board.pieces(chess.KNIGHT, chess.WHITE):
         if is_outpost(board, sq, chess.WHITE):
             score_white += 18
@@ -614,27 +635,6 @@ def evaluate(board: chess.Board) -> int:
     score_white += pawn_structure_hash(board)
 
     # --- Rook on 7th/8th, open/semi-open files ---
-    def is_open_file(board, file, color):
-        own_pawns = board.pieces(chess.PAWN, color)
-        enemy_pawns = board.pieces(chess.PAWN, not color)
-        for r in range(8):
-            sq = chess.square(file, r)
-            if sq in own_pawns:
-                return False
-        for r in range(8):
-            sq = chess.square(file, r)
-            if sq in enemy_pawns:
-                return False
-        return True
-
-    def is_semi_open_file(board, file, color):
-        own_pawns = board.pieces(chess.PAWN, color)
-        for r in range(8):
-            sq = chess.square(file, r)
-            if sq in own_pawns:
-                return False
-        return True
-
     for sq in board.pieces(chess.ROOK, chess.WHITE):
         rank = chess.square_rank(sq)
         file = chess.square_file(sq)
@@ -724,7 +724,6 @@ def evaluate(board: chess.Board) -> int:
 
     # --- Return for side to move ---
     return score_white if board.turn == chess.WHITE else -score_white
-
 # ---------- QUIESCENCE ----------
 def quiescence(board: chess.Board, alpha: int, beta: int) -> int:
     global node_count
