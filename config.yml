@@ -32,7 +32,7 @@ engines:
       Threads: 4
       Hash: 4500
       Table Memory: 512
-      Personality: "Active"
+      Personality: "Defensive"
      # Dynamism: 169
       #MoveOverheadMS: 200
      # Backend: "dnnl"
