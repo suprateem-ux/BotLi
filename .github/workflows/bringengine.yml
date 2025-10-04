@@ -1,0 +1,31 @@
+name: Fetch SupraNova Engine
+
+# Run only on manual trigger
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch-engine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history to avoid git errors
+
+      - name: Create engines folder if not exists
+        run: mkdir -p engines
+
+      - name: Download SupraNova engine
+        run: |
+          curl -L -o engines/supranova https://github.com/suprateem-ux/SupraNova-Chess-engine-/releases/download/v1.0.8/Supranova-ubuntu-latest
+          chmod +x engines/supranova
+
+      - name: Commit and push engine
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add engines/supranova
+          git commit -m "Add/Update SupraNova engine"
+          git push
