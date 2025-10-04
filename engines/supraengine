@@ -319,77 +319,78 @@ def see_safe(board: chess.Board, move: chess.Move) -> int:
         return 0
 
 def see(board: chess.Board, move: chess.Move) -> int:
+    """Pure bitboard SEE, no Board.push/copy, no board.attackers(), fully compatible."""
     if not board.is_capture(move) and not move.promotion:
         return 0
 
-    pbb = PosBB(board)
-    to_sq = move.to_square
-    from_sq = move.from_square
-    side = board.turn
+    def pawn_attackers(square, color, pawns):
+        # Returns pawns of given color attacking 'square'
+        if color == chess.WHITE:
+            return pawns & chess.BB_PAWN_ATTACKS[chess.BLACK][square]
+        else:
+            return pawns & chess.BB_PAWN_ATTACKS[chess.WHITE][square]
 
+    side = board.turn
+    from_sq = move.from_square
+    to_sq = move.to_square
+
+    occ = int(board.occupied)
+    pieces = {
+        chess.WHITE: {pt: int(board.pieces(pt, chess.WHITE)) for pt in PIECE_VALUE},
+        chess.BLACK: {pt: int(board.pieces(pt, chess.BLACK)) for pt in PIECE_VALUE},
+    }
+
+    # Victim
     if board.is_en_passant(move):
         victim_sq = to_sq + (-8 if side == chess.WHITE else 8)
-        victim_piece_type = chess.PAWN
+        victim_value = PIECE_VALUE[chess.PAWN]
     else:
-        victim_piece = board.piece_at(to_sq)
         victim_sq = to_sq
-        victim_piece_type = victim_piece.piece_type if victim_piece else None
+        victim = board.piece_at(to_sq)
+        victim_value = PIECE_VALUE.get(victim.piece_type, 0) if victim else 0
 
-    victim_value = PIECE_VALUE.get(victim_piece_type, 0) if victim_piece_type else 0
-
-    attackers_white = pbb.attackers_bb(chess.WHITE, to_sq)
-    attackers_black = pbb.attackers_bb(chess.BLACK, to_sq)
-
-    mover = board.piece_at(from_sq)
-    if mover:
-        if mover.color == chess.WHITE:
-            attackers_white &= ~(1 << from_sq)
-        else:
-            attackers_black &= ~(1 << from_sq)
-
-    occ = pbb.occ
+    # Remove the moving piece and adjust occ
+    moving_piece = board.piece_at(from_sq)
+    if moving_piece is None:
+        return 0  # Invalid move
+    moving_pt = moving_piece.piece_type
+    moving_color = moving_piece.color
+    pieces[moving_color][moving_pt] &= ~(1 << from_sq)
     occ &= ~(1 << from_sq)
-    occ |= 1 << to_sq
+    occ |= (1 << to_sq)
     if board.is_en_passant(move):
+        pieces[not side][chess.PAWN] &= ~(1 << victim_sq)
         occ &= ~(1 << victim_sq)
 
-    try:
-        b = board.copy(stack=False)
-    except TypeError:
-        b = board.copy()
+    gains = [victim_value]
+    stm = not side  # opponent moves next
 
-    try:
-        b.push(move)
-    except Exception:
-        return see_safe(board, move)
-
-    gains: List[int] = [victim_value]
-    side_to_move = not side
+    def all_attackers(color, occ):
+        att = 0
+        att |= pawn_attackers(to_sq, color, pieces[color][chess.PAWN])
+        att |= chess.BB_KNIGHT_ATTACKS[to_sq] & pieces[color][chess.KNIGHT]
+        att |= chess.bishop_attacks(to_sq, occ) & pieces[color][chess.BISHOP]
+        att |= chess.rook_attacks(to_sq, occ) & pieces[color][chess.ROOK]
+        att |= chess.queen_attacks(to_sq, occ) & pieces[color][chess.QUEEN]
+        att |= chess.BB_KING_ATTACKS[to_sq] & pieces[color][chess.KING]
+        return att
 
     while True:
-        attackers = list(b.attackers(side_to_move, to_sq))
-        if not attackers:
+        atks = all_attackers(stm, occ)
+        if not atks:
             break
-        best_sq = attackers[0]
-        piece = b.piece_at(best_sq)
-        best_val = PIECE_VALUE.get(piece.piece_type, 0) if piece else 0
-        for a in attackers:
-            piece_a = b.piece_at(a)
-            pv = PIECE_VALUE.get(piece_a.piece_type, 0) if piece_a else 0
-            if pv < best_val:
-                best_val = pv
-                best_sq = a
-        cap_move = chess.Move(best_sq, to_sq)
-        if cap_move not in b.legal_moves:
+        # Least valuable attacker
+        for pt in (chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING):
+            bb = pieces[stm][pt] & atks
+            if bb:
+                sq = (bb & -bb).bit_length() - 1
+                pieces[stm][pt] &= ~(1 << sq)
+                occ &= ~(1 << sq)
+                gains.append(PIECE_VALUE[pt] - gains[-1])
+                stm = not stm
+                break
+        else:
             break
-        captured_now = b.piece_at(to_sq)
-        captured_now_val = PIECE_VALUE.get(captured_now.piece_type, 0) if captured_now else 0
-        gains.append(captured_now_val - gains[-1])
-        try:
-            b.push(cap_move)
-        except Exception:
-            break
-        side_to_move = not side_to_move
 
     for i in range(len(gains) - 2, -1, -1):
         gains[i] = max(-gains[i + 1], gains[i])
