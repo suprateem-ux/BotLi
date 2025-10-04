@@ -318,38 +318,60 @@ def see_safe(board: chess.Board, move: chess.Move) -> int:
     except Exception:
         return 0
 
+# ---------- Sliding attack helpers ----------
+def ray_attacks(square, deltas, occ):
+    attacks = 0
+    for d in deltas:
+        sq = square
+        while True:
+            sq += d
+            if sq < 0 or sq > 63:
+                break
+            # file wrap prevention
+            if (sq % 8 == 0 and d in (-1, 7, -9)) or (sq % 8 == 7 and d in (1, -7, 9)):
+                break
+            attacks |= 1 << sq
+            if occ & (1 << sq):
+                break
+    return attacks
+
+def bishop_attacks(square, occ):
+    return ray_attacks(square, [9, 7, -9, -7], occ)
+
+def rook_attacks(square, occ):
+    return ray_attacks(square, [8, -8, 1, -1], occ)
+
+def queen_attacks(square, occ):
+    return bishop_attacks(square, occ) | rook_attacks(square, occ)
+
+# ---------- SEE function ----------
 def see(board: chess.Board, move: chess.Move) -> int:
-    """Pure bitboard SEE, no Board.push/copy, no board.attackers(), fully compatible."""
     if not board.is_capture(move) and not move.promotion:
         return 0
-
-    def pawn_attackers(square, color, pawns):
-        # Returns pawns of given color attacking 'square'
-        if color == chess.WHITE:
-            return pawns & chess.BB_PAWN_ATTACKS[chess.BLACK][square]
-        else:
-            return pawns & chess.BB_PAWN_ATTACKS[chess.WHITE][square]
 
     side = board.turn
     from_sq = move.from_square
     to_sq = move.to_square
 
     occ = int(board.occupied)
+
     pieces = {
         chess.WHITE: {pt: int(board.pieces(pt, chess.WHITE)) for pt in PIECE_VALUE},
         chess.BLACK: {pt: int(board.pieces(pt, chess.BLACK)) for pt in PIECE_VALUE},
     }
 
-    # Victim
+    # Victim square and value
     if board.is_en_passant(move):
         victim_sq = to_sq + (-8 if side == chess.WHITE else 8)
         victim_value = PIECE_VALUE[chess.PAWN]
+        pieces[not side][chess.PAWN] &= ~(1 << victim_sq)
+        occ &= ~(1 << victim_sq)
     else:
         victim_sq = to_sq
         victim = board.piece_at(to_sq)
         victim_value = PIECE_VALUE.get(victim.piece_type, 0) if victim else 0
 
-    # Remove the moving piece and adjust occ
+    # Remove moving piece
     moving_piece = board.piece_at(from_sq)
     if moving_piece is None:
         return 0  # Invalid move
@@ -358,23 +380,29 @@ def see(board: chess.Board, move: chess.Move) -> int:
     pieces[moving_color][moving_pt] &= ~(1 << from_sq)
     occ &= ~(1 << from_sq)
     occ |= (1 << to_sq)
-    if board.is_en_passant(move):
-        pieces[not side][chess.PAWN] &= ~(1 << victim_sq)
-        occ &= ~(1 << victim_sq)
 
     gains = [victim_value]
-    stm = not side  # opponent moves next
+    stm = not side  # side to move next
 
+    # Pawn attack helper
+    def pawn_attackers(square, color, pawns):
+        if color == chess.WHITE:
+            return pawns & chess.BB_PAWN_ATTACKS[chess.BLACK][square]
+        else:
+            return pawns & chess.BB_PAWN_ATTACKS[chess.WHITE][square]
+
+    # All attackers
     def all_attackers(color, occ):
         att = 0
         att |= pawn_attackers(to_sq, color, pieces[color][chess.PAWN])
         att |= chess.BB_KNIGHT_ATTACKS[to_sq] & pieces[color][chess.KNIGHT]
-        att |= chess.bishop_attacks(to_sq, occ) & pieces[color][chess.BISHOP]
-        att |= chess.rook_attacks(to_sq, occ) & pieces[color][chess.ROOK]
-        att |= chess.queen_attacks(to_sq, occ) & pieces[color][chess.QUEEN]
+        att |= bishop_attacks(to_sq, occ) & pieces[color][chess.BISHOP]
+        att |= rook_attacks(to_sq, occ) & pieces[color][chess.ROOK]
+        att |= queen_attacks(to_sq, occ) & pieces[color][chess.QUEEN]
         att |= chess.BB_KING_ATTACKS[to_sq] & pieces[color][chess.KING]
         return att
 
+    # Main SEE loop
     while True:
         atks = all_attackers(stm, occ)
         if not atks:
@@ -392,9 +420,12 @@ def see(board: chess.Board, move: chess.Move) -> int:
         else:
             break
 
+    # Negamax propagation
     for i in range(len(gains) - 2, -1, -1):
         gains[i] = max(-gains[i + 1], gains[i])
+
     return gains[0] if gains else 0
+
 
 # ---------- MOVE ORDERING ----------
 def mvv_lva_score(board: chess.Board, move: chess.Move) -> int:
