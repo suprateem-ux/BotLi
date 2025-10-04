@@ -40,7 +40,7 @@ engines:
     limits: 
   standard_human:
     dir: "./engines"
-    name: "supraengine"
+    name: "supranova"
     ponder: false
     silence_stderr: false
     move_overhead_multiplier: 2.0
