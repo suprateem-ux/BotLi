@@ -3,7 +3,7 @@ name: Ruff Auto-fix
 on:
   push:
     branches:
-      - lichessbot
+      - libot
   workflow_dispatch:
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
           git add .
           if ! git diff --cached --quiet; then
             git commit -m "chore(ruff): auto-fix linting issues"
-            git push origin lichessbot
+            git push origin libot
           else
             echo "No changes to commit."
           fi
