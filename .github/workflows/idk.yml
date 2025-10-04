@@ -38,7 +38,7 @@ jobs:
         run: |
           pip install --no-cache-dir --prefer-binary -r requirements.txt
           sed -i "s/TokenTimeIsBackBuddyss/${{ secrets.LICHESS_KEY }}/g" config.yml
-          chmod +x ./engines/dragon-linux-avx2 ./engines/supraengine
+          chmod +x ./engines/dragon-linux-avx2 ./engines/supraengine ./engines/supranova
 
       - name: Run Bot
         run: |
