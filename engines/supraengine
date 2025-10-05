@@ -324,11 +324,13 @@ def ray_attacks(square, deltas, occ):
     for d in deltas:
         sq = square
         while True:
+            prev_file = sq % 8
             sq += d
             if sq < 0 or sq > 63:
                 break
-            # file wrap prevention
-            if (sq % 8 == 0 and d in (-1, 7, -9)) or (sq % 8 == 7 and d in (1, -7, 9)):
+            new_file = sq % 8
+            # If moving left/right and file changed by more than 1, it's a wrap
+            if abs(new_file - prev_file) > 1:
                 break
             attacks |= 1 << sq
             if occ & (1 << sq):
