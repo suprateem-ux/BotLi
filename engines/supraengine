@@ -809,20 +809,42 @@ def quiescence(board: chess.Board, alpha: int, beta: int) -> int:
     if timeout():
         raise TimeoutError
     node_count += 1
+
     stand = evaluate(board)
     if stand >= beta:
         return beta
     if alpha < stand:
         alpha = stand
-    moves = [m for m in board.legal_moves if board.is_capture(m) or m.promotion]
+
+    # Delta pruning: stand-pat too low
+    if stand + FUTILITY_MARGIN < alpha:
+        return alpha
+
+    # Generate tactical moves: captures, promotions (to queen), and checks
+    moves = []
+    for m in board.legal_moves:
+        if board.is_capture(m):
+            # SEE pruning: skip hopeless captures
+            if see(board, m) < 0:
+                continue
+            moves.append(m)
+        elif m.promotion == chess.QUEEN:
+            moves.append(m)
+        else:
+            # Optionally include checks in quiescence
+            try:
+                if board.gives_check(m):
+                    moves.append(m)
+            except Exception:
+                pass
+
     if not moves:
         return stand
-    moves = order_moves(board, moves, None, 0)
+
+    if len(moves) > 1:
+        moves = order_moves(board, moves, None, 0)
+
     for m in moves:
-        if board.is_capture(m):
-            s = see(board, m)
-            if s + 50 < 0:
-                continue
         board.push(m)
         try:
             val = -quiescence(board, -beta, -alpha)
@@ -833,7 +855,7 @@ def quiescence(board: chess.Board, alpha: int, beta: int) -> int:
         if val > alpha:
             alpha = val
     return alpha
-
+   
 # ---------- TRANSPO TABLE ----------
 TT_EXACT = 0
 TT_LOWER = 1
