@@ -443,24 +443,48 @@ def move_score(
     board: chess.Board,
     move: chess.Move,
     pv_move: Optional[chess.Move],
-    ply: int,
+    ply: int
 ) -> int:
-    score = 0
+    # 1. PV/TT move always first
     if pv_move and move == pv_move:
-        score += 1_000_000
-    score += mvv_lva_score(board, move)
-    if move in KILLERS.get(ply, []):
-        score += 80_000
-    score += HISTORY.get((move.from_square, move.to_square), 0)
+        return 10_000_000
+
+    # 2. Promotions (especially to queen)
+    if move.promotion:
+        promo_value = PIECE_VALUE.get(move.promotion, 0)
+        # In endgame, promote to queen > rook > others
+        return 9_000_000 + promo_value * 100
+
+    # 3. Captures (SEE filters out bad ones)
     if board.is_capture(move):
-        s = see(board, move)
-        score += max(0, s)
-    try:
-        if board.gives_check(move):
-            score += 50_000
-    except Exception:
-        pass
-    return score
+        see_val = see(board, move)
+        victim = board.piece_at(move.to_square)
+        attacker = board.piece_at(move.from_square)
+        mvv = PIECE_VALUE.get(victim.piece_type, 0) if victim else 0
+        lva = PIECE_VALUE.get(attacker.piece_type, 0) if attacker else 1
+        base_score = 5_000_000 + mvv * 100 - lva
+        # Good captures (SEE >= 0) score much higher
+        if see_val >= 0:
+            return base_score + see_val + 1_000_000
+        # Bad captures get lower priority
+        else:
+            return base_score + see_val
+
+    # 4. Checks: in tactical positions, checks are prioritized
+    if board.is_check() or any(board.is_capture(m) for m in board.legal_moves):
+        try:
+            if board.gives_check(move):
+                return 4_000_000
+        except Exception:
+            pass
+
+    # 5. Killer moves: quiet moves that caused beta cutoff at this ply
+    if move in KILLERS.get(ply, []):
+        return 3_000_000
+
+    # 6. History heuristic: quiet moves that historically caused cutoffs
+    hist_score = HISTORY.get((move.from_square, move.to_square), 0)
+    return hist_score
 
 def order_moves(
     board: chess.Board, moves: List[chess.Move], pv_move: Optional[chess.Move], ply: int
