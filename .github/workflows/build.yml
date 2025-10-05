@@ -34,8 +34,9 @@ jobs:
           python3 -m nuitka \
             --onefile \
             --output-dir=engines \
-            --include-plugin-directory=. \
-            user_interface.py
+           --output-filename=user_interface \
+           user_interface.py
+
 
       - name: List Build Output
         run: ls -la engines/
