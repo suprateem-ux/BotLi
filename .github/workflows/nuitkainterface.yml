@@ -1,0 +1,38 @@
+name: Fetch BotLi Artifact
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y curl jq unzip git
+
+      - name: Download BotLi Artifact
+        env:
+          ARTIFACT_URL: "https://github.com/suprateem-ux/BotLi/actions/runs/18272866164/artifacts/4189471637"
+        run: |
+          # GitHub artifact download URL redirects to a ZIP file
+          curl -L -o botli-artifact.zip "$ARTIFACT_URL"
+          unzip -o botli-artifact.zip -d .
+          ls -la  # confirm the files
+
+      - name: Commit and Push to Root
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add botli-linux config.yml
+          git commit -m "Update botli-linux from workflow artifact" || echo "No changes to commit"
+          git push origin main
