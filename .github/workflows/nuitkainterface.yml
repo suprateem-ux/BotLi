@@ -22,8 +22,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: botli-linux
-          path: .
-
+          path: https://github.com/suprateem-ux/BotLi/actions/runs/18272866164/artifacts/4189471637 
 
       - name: Commit and Push to Root
         env:
