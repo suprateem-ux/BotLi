@@ -451,45 +451,28 @@ def mvv_lva_score(board: chess.Board, move: chess.Move) -> int:
         return victim_value * 10 - attacker_value
     return 0
 
-def move_score(board, move, pv_move, ply):
+def move_score(
+    board: chess.Board,
+    move: chess.Move,
+    pv_move: Optional[chess.Move],
+    ply: int,
+) -> int:
+    score = 0
     if pv_move and move == pv_move:
-        return 10_000_000
-    # Promotions get highest, especially if capture or SEE-good
-    if move.promotion:
-        see_val = see(board, move)
-        promo_value = PIECE_VALUE.get(move.promotion, 0)
-        base = 2_000_000 + promo_value * 100
-        if board.is_capture(move):
-            victim = board.piece_at(move.to_square)
-            victim_value = PIECE_VALUE.get(victim.piece_type, 0) if victim else 0
-            base += victim_value * 10
-        return base + max(0, see_val)
-    # Captures: SEE, then MVV-LVA
-    if board.is_capture(move):
-        see_val = see(board, move)
-        victim = board.piece_at(move.to_square)
-        attacker = board.piece_at(move.from_square)
-        victim_value = PIECE_VALUE.get(victim.piece_type, 0) if victim else 0
-        attacker_value = PIECE_VALUE.get(attacker.piece_type, 0) if attacker else 1
-        mvv_lva = victim_value * 10 - attacker_value
-        # SEE-positive captures get a big boost
-        if see_val > 0:
-            return 1_000_000 + see_val * 100 + mvv_lva
-        else:
-            # Bad captures: order by SEE value (less important)
-            return see_val
-    # Checks (optional): boost if tactical position
-    if board.is_check() or any(board.is_capture(m) for m in board.legal_moves):
-        try:
-            if board.gives_check(move):
-                return 500_000
-        except Exception:
-            pass
-    # Killer/history/quiet as before
+        score += 1_000_000
+    score += mvv_lva_score(board, move)
     if move in KILLERS.get(ply, []):
-        return 200_000
-    return HISTORY.get((move.from_square, move.to_square), 0)
-
+        score += 80_000
+    score += HISTORY.get((move.from_square, move.to_square), 0)
+    if board.is_capture(move):
+        s = see(board, move)
+        score += max(0, s)
+    try:
+        if board.gives_check(move):
+            score += 50_000
+    except Exception:
+        pass
+    return score
 def order_moves(
     board: chess.Board, moves: List[chess.Move], pv_move: Optional[chess.Move], ply: int
 ) -> List[chess.Move]:
