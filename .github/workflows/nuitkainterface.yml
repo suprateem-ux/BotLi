@@ -19,13 +19,11 @@ jobs:
           sudo apt install -y curl jq unzip git
 
       - name: Download BotLi Artifact
-        env:
-          ARTIFACT_URL: "https://github.com/suprateem-ux/BotLi/actions/runs/18272866164/artifacts/4189471637"
-        run: |
-          # GitHub artifact download URL redirects to a ZIP file
-          curl -L -o botli-artifact.zip "$ARTIFACT_URL"
-          unzip -o botli-artifact.zip -d .
-          ls -la  # confirm the files
+        uses: actions/download-artifact@v4
+        with:
+          name: botli-linux
+          path: .
+
 
       - name: Commit and Push to Root
         env:
