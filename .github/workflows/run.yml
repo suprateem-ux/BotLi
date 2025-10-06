@@ -1,0 +1,45 @@
+name: Run BotLiLichessv1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "botli-linux"  # or any other path if changed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355  # just under 6h limit
+
+    concurrency:
+      group: bot-run
+      cancel-in-progress: false  # keep live jobs safe
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Make Executable
+        run: |
+          chmod +x ./botli-linux
+          chmod +x ./engines/dragon-linux-avx2 ./engines/supraengine ./engines/supranova
+          # Inject Lichess token into config
+          sed -i "s/TokenTimeIsBackBuddyss/${{ secrets.LICHESS_KEY }}/g" config.yml
+
+      - name: Run Bot
+        run: |
+          echo "Starting bot..."
+          ./botli-linux "matchmaking" &
+          PID=$!
+          # Auto-exit before GitHub 6h limit (20700s ≈ 5h45min)
+          ( sleep 20700 && echo "Time up. Killing bot..." && kill -SIGTERM $PID ) &
+          wait $PID
+          echo "Bot ended cleanly."
+
+      - name: 🔁 Self-Restart
+        if: always()
+        run: gh workflow run "Run BotLiLichess"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
