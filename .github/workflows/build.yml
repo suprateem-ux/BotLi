@@ -33,16 +33,16 @@ jobs:
         run: |
           python3 -m nuitka \
             --onefile \
-            --output-dir=engines \
-           --output-filename=user_interface \
-           user_interface.py
-
+            --output-filename=botli-linux \
+            user_interface.py
 
       - name: List Build Output
-        run: ls -la engines/
+        run: ls -la
 
-      - name: Upload Executable
+      - name: Upload Executable and Config
         uses: actions/upload-artifact@v4
         with:
           name: botli-linux
-          path: engines/user_interface
+          path: |
+            botli-linux
+            config.yml
