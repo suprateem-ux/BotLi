@@ -22,7 +22,7 @@ engines:
       # time: 20.0
       # depth: 50
       # nodes: 8000000
-  standard: 
+  standard_tournament: 
     dir: "./engines"
     name: "dragon-linux-avx2"
     ponder: true
