@@ -27,8 +27,9 @@ jobs:
 
       - name: Run Ruff (fix + format)
         run: |
-          ruff check . --fix --config .ruff.toml || true
-          ruff format . --config .ruff.toml
+          # Run Ruff with default settings (no config file)
+          ruff check . --fix || true
+          ruff format .
 
       - name: Commit changes
         run: |
