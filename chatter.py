@@ -11,6 +11,7 @@ from lichess_game import LichessGame
 from utils import ml_print
 
 COMMANDS = {
+    "challenge": "Shows time controls and game modes the bot accepts in challenges.",
     "cpu": "Shows information about the bot's CPU (processor, cores, threads, frequency).",
     "draw": "Explains the bot's draw offering/accepting policy based on evaluation and game length.",
     "eval": "Shows the latest position evaluation.",
@@ -21,6 +22,7 @@ COMMANDS = {
     "quiet": "Stops automatic evaluation printing (use after !printeval).",
     "ram": "Displays the amount of system memory (RAM).",
     "takeback": "Shows how many takebacks are allowed and how many the opponent has used.",
+    "variants": "Shows the chess variants the bot can play.",
 }
 SPECTATOR_COMMANDS = {"pv": "Shows the principal variation (best line of play) from the latest position."}
 
@@ -34,6 +36,8 @@ class Chatter:
         self.game_info = game_information
         self.lichess_game = lichess_game
         self.opponent_username = self.game_info.black_name if lichess_game.is_white else self.game_info.white_name
+        self.challenge_message = self._get_challenge_message(config)
+        self.variants_message = self._get_variants_message(config)
         self.cpu_message = self._get_cpu()
         self.draw_message = self._get_draw_message(config)
         self.name_message = self._get_name_message(config.version)
@@ -91,6 +95,8 @@ class Chatter:
 
     async def _handle_command(self, chat_message: ChatMessage, takeback_count: int, max_takebacks: int) -> None:
         match chat_message.text[1:].lower():
+            case "challenge":
+                await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.challenge_message)
             case "cpu":
                 await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.cpu_message)
             case "draw":
@@ -134,12 +140,20 @@ class Chatter:
                 await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.ram_message)
             case "takeback":
                 await self._send_takeback_message(chat_message.room, takeback_count, max_takebacks)
+            case "variants":
+                await self.api.send_chat_message(self.game_info.id_, chat_message.room, self.variants_message)
             case command if command.startswith("help"):
                 commands = COMMANDS if chat_message.room == "player" else COMMANDS | SPECTATOR_COMMANDS
                 words = chat_message.text.split()
                 if len(words) == 1:
-                    message = f"Commands: !{', !'.join(commands)}. Type !help <command> for more information."
-                    await self.api.send_chat_message(self.game_info.id_, chat_message.room, message)
+                    await self.api.send_chat_message(
+                        self.game_info.id_, chat_message.room, f"Commands: !{', !'.join(commands)}."
+                    )
+                    await self.api.send_chat_message(
+                        self.game_info.id_,
+                        chat_message.room,
+                        "Type !help <command> to get an explanation of the command.",
+                    )
                     return
 
                 command = words[1].lstrip("!").lower()
@@ -201,6 +215,11 @@ class Chatter:
 
         return f"{mem_gib:.1f} GiB"
 
+    @staticmethod
+    def _get_variants_message(config: Config) -> str:
+        variants = ", ".join(config.challenge.variants)
+        return f"Accepted variants: {variants}"
+
     def _get_draw_message(self, config: Config) -> str:
         too_low_rating = (
             config.offer_draw.min_rating is not None
@@ -223,6 +242,42 @@ class Chatter:
 
     def _get_name_message(self, version: str) -> str:
         return f"{self.username} running {self.lichess_game.engine.name} (BotLi {version})"
+
+    def _get_challenge_message(self, config: Config) -> str:
+        parts = []
+
+        if config.challenge.human_modes and config.challenge.human_time_controls:
+            modes = ", ".join(config.challenge.human_modes)
+            tcs = ", ".join(config.challenge.human_time_controls)
+            parts.append(f"Humans ({modes}): {tcs}")
+
+        if config.challenge.bot_modes and config.challenge.bot_time_controls:
+            modes = ", ".join(config.challenge.bot_modes)
+            tcs = ", ".join(config.challenge.bot_time_controls)
+            if config.challenge.bullet_with_increment_only:
+                tcs = tcs.replace("bullet", "bullet (with increment)")
+            parts.append(f"Bots ({modes}): {tcs}")
+
+        if not parts:
+            return f"{self.username} does not accept challenges."
+
+        message = f"{'. '.join(parts)}."
+
+        if config.challenge.min_initial not in {None, 0} and config.challenge.max_initial not in {None, 10800}:
+            message += f" Initial: {config.challenge.min_initial}-{config.challenge.max_initial}s."
+        elif config.challenge.min_initial not in {None, 0}:
+            message += f" Min initial: {config.challenge.min_initial}s"
+        elif config.challenge.max_initial not in {None, 10800}:
+            message += f" Max initial: {config.challenge.max_initial}s"
+
+        if config.challenge.min_increment not in {None, 0} and config.challenge.max_increment not in {None, 180}:
+            message += f" Increment: {config.challenge.min_increment}-{config.challenge.max_increment}s."
+        elif config.challenge.min_increment not in {None, 0}:
+            message += f" Min increment: {config.challenge.min_increment}s"
+        elif config.challenge.max_increment not in {None, 180}:
+            message += f" Max increment: {config.challenge.max_increment}s"
+
+        return message
 
     def _format_message(self, message: str | None) -> str | None:
         if not message:
